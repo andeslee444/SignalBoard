@@ -79,46 +79,66 @@ serve(async (req) => {
     console.log(`Found ${catalysts?.length || 0} catalysts without embeddings`)
 
     let processedCount = 0
+    const BATCH_SIZE = useOpenAI ? 10 : 20 // Smaller batches for OpenAI
+    const DELAY_MS = useOpenAI ? 1000 : 0 // 1 second delay between OpenAI batches
 
-    for (const catalyst of catalysts || []) {
-      // Create text representation for embedding
-      const textParts = [
-        catalyst.type,
-        catalyst.ticker,
-        catalyst.title,
-        catalyst.description || ''
-      ]
+    // Process in batches
+    for (let i = 0; i < (catalysts || []).length; i += BATCH_SIZE) {
+      const batch = catalysts!.slice(i, i + BATCH_SIZE)
       
-      const processedText = textParts.join(' ')
-      
-      let embedding: number[]
-      
-      if (useOpenAI) {
+      const batchPromises = batch.map(async (catalyst) => {
         try {
-          embedding = await generateOpenAIEmbedding(processedText, openAIKey)
-          console.log(`Generated OpenAI embedding for catalyst ${catalyst.id}`)
+          // Create text representation for embedding
+          const textParts = [
+            catalyst.type,
+            catalyst.ticker,
+            catalyst.title,
+            catalyst.description || ''
+          ]
+          
+          const processedText = textParts.join(' ')
+          
+          let embedding: number[]
+          
+          if (useOpenAI) {
+            try {
+              embedding = await generateOpenAIEmbedding(processedText, openAIKey)
+              console.log(`Generated OpenAI embedding for catalyst ${catalyst.id}`)
+            } catch (err) {
+              console.error(`OpenAI error, falling back to basic embedding:`, err)
+              embedding = generateEmbedding(processedText)
+            }
+          } else {
+            embedding = generateEmbedding(processedText)
+          }
+          
+          // Update catalyst with embedding
+          const { error: updateError } = await supabase
+            .from('catalysts')
+            .update({
+              embedding: `[${embedding.join(',')}]`,
+              processed_text: processedText
+            })
+            .eq('id', catalyst.id)
+
+          if (updateError) {
+            console.error(`Error updating catalyst ${catalyst.id}:`, updateError)
+          } else {
+            processedCount++
+          }
         } catch (err) {
-          console.error(`OpenAI error, falling back to basic embedding:`, err)
-          embedding = generateEmbedding(processedText)
+          console.error(`Failed to process catalyst ${catalyst.id}:`, err)
         }
-      } else {
-        embedding = generateEmbedding(processedText)
+      })
+
+      await Promise.all(batchPromises)
+      
+      // Delay between batches for rate limiting
+      if (useOpenAI && i + BATCH_SIZE < catalysts!.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_MS))
       }
       
-      // Update catalyst with embedding
-      const { error: updateError } = await supabase
-        .from('catalysts')
-        .update({
-          embedding: `[${embedding.join(',')}]`,
-          processed_text: processedText
-        })
-        .eq('id', catalyst.id)
-
-      if (updateError) {
-        console.error(`Error updating catalyst ${catalyst.id}:`, updateError)
-      } else {
-        processedCount++
-      }
+      console.log(`Processed batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(catalysts!.length / BATCH_SIZE)}`)
     }
 
     console.log(`Generated embeddings for ${processedCount} catalysts`)

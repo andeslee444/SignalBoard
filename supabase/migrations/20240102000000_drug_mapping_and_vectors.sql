@@ -60,12 +60,13 @@ CREATE TABLE scraper_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert default scraper configurations
+-- Insert default scraper configurations with more reasonable schedules
 INSERT INTO scraper_config (scraper_name, schedule, config) VALUES
-  ('fda', '*/30 * * * *', '{"priority": "high", "batch_size": 100}'::jsonb),
+  ('fda', '0 6 * * *', '{"priority": "low", "batch_size": 100, "note": "FDA data is 2-3 months delayed, daily check is sufficient"}'::jsonb),
   ('earnings', '0 */6 * * *', '{"priority": "medium", "days_ahead": 30}'::jsonb),
   ('sec', '*/15 * * * *', '{"priority": "high", "forms": ["8-K", "10-K", "10-Q", "S-1", "DEF 14A"]}'::jsonb),
-  ('fed_rates', '0 8,16 * * *', '{"priority": "medium", "sources": ["fed", "ecb"]}'::jsonb);
+  ('fed_rates', '0 8,16 * * *', '{"priority": "medium", "sources": ["fed", "ecb"]}'::jsonb),
+  ('data_freshness_monitor', '0 */2 * * *', '{"priority": "low", "alert_threshold_hours": 48}'::jsonb);
 
 -- Create API keys table for external services
 CREATE TABLE api_keys (
