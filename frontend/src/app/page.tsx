@@ -1,206 +1,186 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState, useMemo } from 'react';
+import { Timeline } from '@/components/Timeline/Timeline';
+import { CatalystDetailPanel } from '@/components/Timeline/CatalystDetailPanel';
+import { TimelineFilters, FilterState } from '@/components/Timeline/TimelineFilters';
+import { AuthButton } from '@/components/auth/AuthButton';
+import { useCatalysts } from '@/hooks/useCatalysts';
+import { Catalyst } from '@/types/catalyst';
 
-interface Catalyst {
-  id: string
-  type: string
-  ticker: string
-  title: string
-  description: string | null
-  event_date: string
-  impact_score: number | null
-  confidence_score: number | null
-  created_at: string
-}
+export default function HomePage() {
+  const { catalysts, loading, error } = useCatalysts();
+  const [selectedCatalyst, setSelectedCatalyst] = useState<Catalyst | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>({
+    types: [],
+    tickers: [],
+    impactRange: [0, 100],
+  });
+  const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({
+    start: null,
+    end: null,
+  });
 
-export default function Home() {
-  const [catalysts, setCatalysts] = useState<Catalyst[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Filter catalysts based on search, filters, and date range
+  const filteredCatalysts = useMemo(() => {
+    if (!catalysts) return [];
 
-  useEffect(() => {
-    fetchCatalysts()
-    
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('catalyst-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'catalysts' },
-        (payload) => {
-          console.log('Real-time update:', payload)
-          if (payload.eventType === 'INSERT') {
-            setCatalysts(prev => [payload.new as Catalyst, ...prev])
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [])
-
-  const fetchCatalysts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('catalysts')
-        .select('*')
-        .order('event_date', { ascending: true })
-        .limit(20)
-
-      if (error) throw error
-
-      setCatalysts(data || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch catalysts')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const triggerScraper = async (type: 'fda' | 'earnings' | 'polygon-earnings' | 'sec') => {
-    try {
-      const functionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/scrape-${type}`
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-        },
-      })
-
-      const result = await response.json()
-      console.log(`${type} scraper result:`, result)
-      
-      if (result.success) {
-        alert(`${type.toUpperCase()} scraper completed! Processed ${result.catalysts} catalysts.`)
-      } else {
-        alert(`Error: ${result.error}`)
+    return catalysts.filter(catalyst => {
+      // Search filter (fuzzy search on title, ticker, description)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = 
+          catalyst.title?.toLowerCase().includes(query) ||
+          catalyst.ticker?.toLowerCase().includes(query) ||
+          catalyst.description?.toLowerCase().includes(query);
+        
+        if (!matchesSearch) return false;
       }
-    } catch (err) {
-      console.error('Scraper error:', err)
-      alert('Failed to trigger scraper')
-    }
-  }
+
+      // Type filter
+      if (filters.types.length > 0 && !filters.types.includes(catalyst.type)) {
+        return false;
+      }
+
+      // Ticker filter
+      if (filters.tickers.length > 0 && !filters.tickers.includes(catalyst.ticker)) {
+        return false;
+      }
+
+      // Impact score filter
+      const impactScore = (catalyst.impact_score ?? 0) * 100;
+      if (impactScore < filters.impactRange[0] || impactScore > filters.impactRange[1]) {
+        return false;
+      }
+
+      // Date range filter
+      const eventDate = new Date(catalyst.event_date);
+      if (dateRange.start && eventDate < dateRange.start) return false;
+      if (dateRange.end && eventDate > dateRange.end) return false;
+
+      return true;
+    });
+  }, [catalysts, searchQuery, filters, dateRange]);
+
+  // Get unique catalyst types and tickers for filter options
+  const uniqueTypes = useMemo(() => {
+    const types = new Set(catalysts?.map(c => c.type) || []);
+    return Array.from(types).sort();
+  }, [catalysts]);
+
+  const uniqueTickers = useMemo(() => {
+    const tickers = new Set(catalysts?.map(c => c.ticker) || []);
+    return Array.from(tickers).sort();
+  }, [catalysts]);
+
+  const handleCatalystSelect = (catalyst: Catalyst) => {
+    setSelectedCatalyst(catalyst);
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedCatalyst(null);
+  };
+
+  const handleExport = () => {
+    // Export filtered catalysts as JSON
+    const dataStr = JSON.stringify(filteredCatalysts, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `signalboard-catalysts-${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
 
   return (
-    <main className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-cyan-400">SignalBoard - Catalyst Pipeline Test</h1>
-        
-        {/* Scraper Controls */}
-        <div className="mb-8 p-6 bg-gray-800 rounded-lg">
-          <h2 className="text-2xl font-semibold mb-4">Data Pipeline Controls</h2>
-          <div className="flex gap-4">
-            <button
-              onClick={() => triggerScraper('fda')}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-            >
-              Run FDA Scraper
-            </button>
-            <button
-              onClick={() => triggerScraper('earnings')}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded transition-colors"
-            >
-              Run Earnings Scraper
-            </button>
-            <button
-              onClick={() => triggerScraper('polygon-earnings')}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded transition-colors"
-            >
-              Run Polygon Scraper
-            </button>
-            <button
-              onClick={() => triggerScraper('sec')}
-              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded transition-colors"
-            >
-              Run SEC Scraper
-            </button>
-          </div>
+    <main className="min-h-screen p-4 md:p-8">
+      {/* Header */}
+      <div className="max-w-7xl mx-auto mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            SignalBoard
+          </h1>
+          <p className="text-lg opacity-70">
+            Event-driven trading intelligence • Predict market catalysts
+          </p>
         </div>
-
-        {/* Portfolio Integration */}
-        <div className="mb-8 p-6 bg-gray-800 rounded-lg">
-          <h2 className="text-2xl font-semibold mb-4">Portfolio Integration</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-gray-700 rounded-lg border border-gray-600">
-              <h3 className="font-semibold mb-2">CSV Upload</h3>
-              <p className="text-sm text-gray-400 mb-3">Import your portfolio holdings</p>
-              <button className="w-full px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded transition-colors text-sm">
-                Upload CSV
-              </button>
-            </div>
-            
-            <div className="p-4 bg-gray-700 rounded-lg border border-gray-600 opacity-75">
-              <h3 className="font-semibold mb-2">Interactive Brokers</h3>
-              <p className="text-sm text-gray-400 mb-3">Full API access to portfolios</p>
-              <button className="w-full px-4 py-2 bg-gray-600 rounded text-sm cursor-not-allowed">
-                Coming Soon
-              </button>
-              <p className="text-xs text-cyan-400 mt-2">Join waitlist →</p>
-            </div>
-            
-            <div className="p-4 bg-gray-700 rounded-lg border border-gray-600 opacity-75">
-              <h3 className="font-semibold mb-2">Alpaca</h3>
-              <p className="text-sm text-gray-400 mb-3">Commission-free trading API</p>
-              <button className="w-full px-4 py-2 bg-gray-600 rounded text-sm cursor-not-allowed">
-                Coming Soon
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Catalysts Display */}
-        <div className="p-6 bg-gray-800 rounded-lg">
-          <h2 className="text-2xl font-semibold mb-4">Recent Catalysts</h2>
-          
-          {loading && <p className="text-gray-400">Loading catalysts...</p>}
-          {error && <p className="text-red-400">Error: {error}</p>}
-          
-          {!loading && !error && (
-            <div className="space-y-4">
-              {catalysts.length === 0 ? (
-                <p className="text-gray-400">No catalysts found. Run a scraper to populate data.</p>
-              ) : (
-                catalysts.map((catalyst) => (
-                  <div key={catalyst.id} className="p-4 bg-gray-700 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <span className="inline-block px-2 py-1 bg-cyan-600 text-xs rounded mr-2">
-                          {catalyst.type.toUpperCase()}
-                        </span>
-                        <span className="text-lg font-semibold">{catalyst.ticker}</span>
-                      </div>
-                      <span className="text-sm text-gray-400">
-                        {new Date(catalyst.event_date).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h3 className="font-medium mb-1">{catalyst.title}</h3>
-                    {catalyst.description && (
-                      <p className="text-sm text-gray-300">{catalyst.description}</p>
-                    )}
-                    <div className="flex gap-4 mt-2 text-sm">
-                      {catalyst.impact_score && (
-                        <span className="text-yellow-400">
-                          Impact: {(catalyst.impact_score * 100).toFixed(0)}%
-                        </span>
-                      )}
-                      {catalyst.confidence_score && (
-                        <span className="text-green-400">
-                          Confidence: {(catalyst.confidence_score * 100).toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+        <div className="mt-2">
+          <AuthButton />
         </div>
       </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="glass rounded-lg p-8">
+              <div className="animate-pulse">
+                <div className="h-4 bg-white/20 rounded w-48 mb-4"></div>
+                <div className="h-4 bg-white/20 rounded w-32"></div>
+              </div>
+              <p className="mt-4 text-sm opacity-70">Loading catalysts...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="glass rounded-lg p-8 text-center">
+            <p className="text-red-400 mb-2">Error loading catalysts</p>
+            <p className="text-sm opacity-70">{error}</p>
+          </div>
+        ) : catalysts.length === 0 ? (
+          <div className="glass rounded-lg p-8 text-center">
+            <p className="text-lg mb-2">No upcoming catalysts</p>
+            <p className="text-sm opacity-70">
+              Catalysts will appear here as they are discovered
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Filters */}
+            <TimelineFilters
+              onFilterChange={setFilters}
+              onSearch={setSearchQuery}
+              onDateRangeChange={setDateRange}
+              onExport={handleExport}
+              catalystTypes={uniqueTypes}
+              tickers={uniqueTickers}
+              dateRange={dateRange}
+            />
+            
+            {/* Timeline */}
+            {filteredCatalysts.length === 0 ? (
+              <div className="glass rounded-lg p-8 text-center">
+                <p className="text-lg mb-2">No catalysts match your filters</p>
+                <p className="text-sm opacity-70">
+                  Try adjusting your search criteria or clearing filters
+                </p>
+              </div>
+            ) : (
+              <Timeline
+                catalysts={filteredCatalysts}
+                onCatalystSelect={handleCatalystSelect}
+                selectedCatalystId={selectedCatalyst?.id}
+              />
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Detail Panel */}
+      <CatalystDetailPanel
+        catalyst={selectedCatalyst}
+        onClose={handleCloseDetail}
+      />
+
+      {/* Footer */}
+      <footer className="max-w-7xl mx-auto mt-16 pt-8 border-t border-white/10">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-xs opacity-50">
+          <p>© 2025 SignalBoard • For educational purposes only</p>
+          <p>SEC data sourced from EDGAR • Not investment advice</p>
+        </div>
+      </footer>
     </main>
-  )
+  );
 }

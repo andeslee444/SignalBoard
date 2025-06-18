@@ -35,24 +35,29 @@ This CLAUDE.md file complements the SignalBoard_prd.md by providing:
 
 ```
 SignalBoard/
-├── backend/
-│   ├── api/              # FastAPI routes
-│   ├── models/           # SQLAlchemy models
-│   ├── services/         # Business logic
-│   ├── ml/               # ML models and pipelines
-│   ├── scrapers/         # Data ingestion microservices
-│   └── utils/            # Shared utilities
+├── supabase/
+│   ├── functions/        # Edge Functions for data processing
+│   │   ├── scrape-fda/   # FDA adverse events scraper
+│   │   ├── scrape-sec/   # SEC filings scraper
+│   │   ├── scrape-earnings/ # Earnings calendar scraper
+│   │   ├── process-embeddings/ # OpenAI embeddings
+│   │   └── predict-catalyst/ # ML predictions
+│   └── migrations/       # Database schema migrations
 ├── frontend/
 │   ├── src/
+│   │   ├── app/          # Next.js app router
 │   │   ├── components/   # React components
+│   │   │   ├── auth/     # Authentication UI
+│   │   │   ├── catalyst/ # Catalyst features
+│   │   │   ├── Timeline/ # Timeline visualization
+│   │   │   └── ui/       # Reusable UI components
+│   │   ├── contexts/     # React contexts
 │   │   ├── hooks/        # Custom React hooks
-│   │   ├── services/     # API clients
-│   │   ├── store/        # Zustand state management
+│   │   ├── lib/          # Utility libraries
+│   │   ├── types/        # TypeScript types
 │   │   └── utils/        # Frontend utilities
 │   └── public/           # Static assets
-├── infrastructure/
-│   ├── terraform/        # AWS infrastructure as code
-│   └── docker/           # Container definitions
+├── scripts/              # Setup and utility scripts
 └── docs/                 # Project documentation
 ```
 
@@ -173,34 +178,32 @@ const DisclaimerBanner = () => (
 
 ## Development Workflow
 
-### Current Phase: MVP Week 1-12
-Based on PRD priorities:
+### Development Phases
 
-**Weeks 1-2**: Supabase Setup & Data Pipeline
+**✅ Completed Phases (Weeks 1-10)**:
+- Weeks 1-2: Supabase Setup & Data Pipeline
+- Weeks 3-4: Timeline UI with Glass Morphism
+- Weeks 5-6: ML Integration with XGBoost
+- Weeks 7-8: Authentication & Security
+- Weeks 9-10: Code Quality & Standards
+
+**🚧 Current Phase (Week 11-12)**: Testing & Documentation
 ```bash
-# Set up Supabase project
-supabase link --project-ref yjaxznsrysvazxqtvcvm
-supabase db push # Apply schema
+# Run tests
+npm test
+npm run test:coverage
 
-# Deploy Edge Functions for scrapers
-supabase functions deploy scrape-fda
-supabase functions deploy scrape-earnings
+# Lint code
+npm run lint
+
+# Build for production
+npm run build
 ```
 
-**Weeks 3-4**: Timeline UI
-```bash
-cd frontend
-# Install dependencies
-npm install @supabase/supabase-js @supabase/auth-ui-react
-npm install d3 @tanstack/react-virtual framer-motion
-```
-
-**Weeks 5-6**: ML Integration
-```bash
-# Deploy ML Edge Functions
-supabase functions deploy predict-catalyst
-supabase functions deploy calculate-similarity
-```
+**📅 Upcoming Phases**:
+- Production deployment preparation
+- Performance optimization
+- User onboarding flow
 
 ## Testing Requirements
 

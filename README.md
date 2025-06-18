@@ -38,26 +38,34 @@ supabase db push
 supabase functions deploy --all
 ```
 
-### Frontend Setup (Coming Soon)
+### Frontend Setup
 
 ```bash
 cd frontend
 npm install
+cp .env.example .env.local
+# Update .env.local with your Supabase credentials
 npm run dev
 ```
 
+Visit [http://localhost:3000](http://localhost:3000) to see the app.
+
 ## 📊 Current Status
 
-**Phase 1 ✅ Complete**: Backend Infrastructure
-- Supabase database with catalyst tracking
-- 5 Edge Functions for data ingestion (FDA, SEC, Earnings)
-- OpenAI embeddings for similarity search
-- Real-time updates configured
+**Phase 1-5 ✅ Complete**: 
+- Backend Infrastructure with Supabase
+- 5 Edge Functions for data ingestion (FDA, SEC, Earnings, ML predictions)
+- Timeline UI with glass morphism design
+- Authentication system with session management
+- ML predictions with XGBoost pipeline
+- Real-time WebSocket updates
+- Testing infrastructure and code quality tools
 
-**Phase 2 🚧 In Progress**: Timeline UI (Week 3-4)
-- Glass morphism UI design
-- Interactive catalyst timeline
-- Real-time data integration
+**Phase 6 🚧 In Progress**: Testing & Documentation
+- Comprehensive unit test coverage (target 80%)
+- User onboarding flow
+- Tutorial system
+- Production deployment preparation
 
 ## 🏗️ Architecture
 
