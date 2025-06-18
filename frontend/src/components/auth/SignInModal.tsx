@@ -66,10 +66,11 @@ export function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignInModalPr
             className="fixed inset-0 flex items-center justify-center z-50 p-4"
             onClick={onClose}
           >
-            <GlassCard
-              className="w-full max-w-md p-8"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div onClick={(e) => e.stopPropagation()}>
+              <GlassCard
+                className="w-full max-w-md p-8"
+                hoverable={false}
+              >
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
@@ -186,6 +187,7 @@ export function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignInModalPr
                 </p>
               </form>
             </GlassCard>
+            </div>
           </motion.div>
         </>
       )}

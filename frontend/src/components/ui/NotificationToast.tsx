@@ -73,9 +73,11 @@ class NotificationManager {
   private listeners: Set<(notification: Notification | null) => void> = new Set();
   private currentNotification: Notification | null = null;
 
-  subscribe(listener: (notification: Notification | null) => void) {
+  subscribe(listener: (notification: Notification | null) => void): () => void {
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   show(notification: Omit<Notification, 'id'>) {
